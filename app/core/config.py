@@ -45,6 +45,23 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
 
+    # Add to Settings class
+
+    # Cloudinary
+    CLOUDINARY_CLOUD_NAME: Optional[str] = None
+    CLOUDINARY_API_KEY: Optional[str] = None
+    CLOUDINARY_API_SECRET: Optional[str] = None
+    CLOUDINARY_UPLOAD_PRESET: str = "imobplan_properties"
+
+    # Geocoding (choose one)
+    MAPBOX_ACCESS_TOKEN: Optional[str] = None
+    GOOGLE_MAPS_API_KEY: Optional[str] = None
+
+    # Property settings
+    MAX_PHOTOS_PER_PROPERTY: int = 20
+    LISTING_EXPIRY_DAYS: int = 60
+    REFRESH_COOLDOWN_HOURS: int = 24
+
     class Config:
         env_file = ".env"
         case_sensitive = True
