@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: realestate_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-realestate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword123}
+      POSTGRES_DB: ${POSTGRES_DB:-realestate_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - realestate_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U realestate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: realestate_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-realestate}:${POSTGRES_PASSWORD:-devpassword123}@db:5432/${POSTGRES_DB:-realestate_db}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./app:/app/app:z  # Added :z for SELinux (Fedora)
+      - ./alembic:/app/alembic:z
+      - ./alembic.ini:/app/alembic.ini:z
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - realestate_network
+    user: "1000:1000"  # Run as your user ID
+
+networks:
+  realestate_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
