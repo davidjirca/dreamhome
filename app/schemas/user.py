@@ -18,8 +18,8 @@ class UserBase(BaseModel):
 # Request schemas
 class UserCreate(UserBase):
     """Schema for user registration"""
-    password: str = Field(..., min_length=8, max_length=72)  # ← Updated max_length
-    password_confirm: str = Field(..., min_length=8, max_length=72)  # ← Updated max_length
+    password: str = Field(..., min_length=8, max_length=128)
+    password_confirm: str = Field(..., min_length=8, max_length=128)
 
     @validator('password_confirm')
     def passwords_match(cls, v, values, **kwargs):
@@ -56,8 +56,8 @@ class UserUpdate(BaseModel):
 class PasswordChange(BaseModel):
     """Schema for password change"""
     current_password: str
-    new_password: str = Field(..., min_length=8, max_length=72)  # ← Updated max_length
-    new_password_confirm: str = Field(..., min_length=8, max_length=72)  # ← Updated max_length
+    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password_confirm: str = Field(..., min_length=8, max_length=128)
 
     @validator('new_password_confirm')
     def passwords_match(cls, v, values, **kwargs):
@@ -66,7 +66,7 @@ class PasswordChange(BaseModel):
         return v
 
 
-# Response schemas (no changes needed below)
+# Response schemas
 class UserResponse(UserBase):
     """Schema for user response"""
     id: UUID

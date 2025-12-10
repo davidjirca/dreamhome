@@ -11,7 +11,8 @@ asyncpg==0.31.0
 
 # Authentication & Security
 python-jose[cryptography]==3.5.0
-passlib[bcrypt]==1.7.4
+passlib[argon2]==1.7.4
+argon2-cffi==23.1.0
 python-dotenv==1.2.1
 pydantic[email]==2.12.5
 pydantic-settings==2.12.0

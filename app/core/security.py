@@ -4,40 +4,35 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.core.config import settings
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def _truncate_password(password: str) -> str:
-    """
-    Truncate password to 72 bytes for bcrypt compatibility.
-    Bcrypt has a maximum password length of 72 bytes.
-    """
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        # Truncate to 72 bytes
-        password_bytes = password_bytes[:72]
-        # Decode back, ignoring errors for incomplete UTF-8 sequences
-        return password_bytes.decode('utf-8', errors='ignore')
-    return password
+# Password hashing context - using Argon2
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a password against a hash.
-    Automatically truncates password to 72 bytes for bcrypt.
+
+    Args:
+        plain_password: Plain text password
+        hashed_password: Hashed password from database
+
+    Returns:
+        True if password matches, False otherwise
     """
-    truncated_password = _truncate_password(plain_password)
-    return pwd_context.verify(truncated_password, hashed_password)
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
     """
-    Generate password hash.
-    Automatically truncates password to 72 bytes for bcrypt.
+    Generate password hash using Argon2.
+
+    Args:
+        password: Plain text password
+
+    Returns:
+        Hashed password string
     """
-    truncated_password = _truncate_password(password)
-    return pwd_context.hash(truncated_password)
+    return pwd_context.hash(password)
 
 
 def create_access_token(subject: str | Any, expires_delta: Optional[timedelta] = None) -> str:
