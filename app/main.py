@@ -31,7 +31,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
-    version="1.0.0",
+    version="0.1.3",
     description="""
     # RealEstate Platform API
 
@@ -72,7 +72,7 @@ async def root():
     """Root endpoint"""
     return {
         "message": "Welcome to RealEstate Platform API",
-        "version": "1.0.0",
+        "version": "0.1.3",
         "docs": "/docs",
         "redoc": "/redoc"
     }

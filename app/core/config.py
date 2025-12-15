@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     LISTING_EXPIRY_DAYS: int = 60
     REFRESH_COOLDOWN_HOURS: int = 24
 
+    REDIS_URL: str = "redis://redis:6379/0"
+    CACHE_ENABLED: bool = True
+    SEARCH_CACHE_TTL: int = 300
+    PROPERTY_CACHE_TTL: int = 3600
+
     class Config:
         env_file = ".env"
         case_sensitive = True

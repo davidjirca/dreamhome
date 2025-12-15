@@ -1,18 +1,23 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func as sa_func, text
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
+from geoalchemy2.functions import ST_DWithin, ST_MakeEnvelope, ST_Contains, ST_Distance, ST_SetSRID, ST_MakePoint
 import re
+import time
 
 from app.models.property import Property, PropertyStatus
-from app.schemas.property import PropertyCreate, PropertyUpdate, PropertySearchParams
+from app.models.search_analytics import SearchQuery
+from app.schemas.property import PropertyCreate, PropertyUpdate, PropertySearchParams, PropertyListItem
 from app.core.config import settings
+from app.core.cache import cache_service
 
 
 class PropertyService:
-    """Service layer for property operations"""
+    """Enhanced service layer for property operations with advanced search and caching"""
 
     @staticmethod
     def generate_slug(title: str, property_id: UUID) -> str:
@@ -50,12 +55,18 @@ class PropertyService:
             float(property_dict['total_area'])
         )
 
+        # Handle geolocation
+        location = None
+        if property_dict.get('latitude') and property_dict.get('longitude'):
+            location = f"SRID=4326;POINT({property_dict['longitude']} {property_dict['latitude']})"
+
         db_property = Property(
-            **property_dict,
+            **{k: v for k, v in property_dict.items() if k not in ['latitude', 'longitude']},
             owner_id=owner_id,
             price_per_sqm=price_per_sqm,
             status=PropertyStatus.DRAFT,
-            slug="temp"  # Will be updated after getting ID
+            slug="temp",  # Will be updated after getting ID
+            location=location
         )
 
         db.add(db_property)
@@ -69,6 +80,10 @@ class PropertyService:
 
         await db.flush()
         await db.refresh(db_property)
+
+        # Invalidate search cache when new property is created
+        await cache_service.invalidate_search_cache()
+
         return db_property
 
     @staticmethod
@@ -77,14 +92,38 @@ class PropertyService:
             property_id: UUID,
             include_deleted: bool = False
     ) -> Optional[Property]:
-        """Get property by ID"""
+        """Get property by ID with caching"""
+
+        # Try cache first
+        if cache_service.is_available():
+            cached = await cache_service.get_property(str(property_id))
+            if cached:
+                # Reconstruct property from cached data
+                # Note: For production, you'd want to properly deserialize this
+                pass  # Skip cache reconstruction for now, fetch from DB
+
         query = select(Property).where(Property.id == property_id)
 
         if not include_deleted:
             query = query.where(Property.deleted_at.is_(None))
 
         result = await db.execute(query)
-        return result.scalar_one_or_none()
+        property_obj = result.scalar_one_or_none()
+
+        # Cache the property
+        if property_obj and cache_service.is_available():
+            await cache_service.set_property(
+                str(property_id),
+                {
+                    "id": str(property_obj.id),
+                    "title": property_obj.title,
+                    "price": float(property_obj.price),
+                    # ... add other fields as needed
+                },
+                ttl=settings.PROPERTY_CACHE_TTL
+            )
+
+        return property_obj
 
     @staticmethod
     async def get_by_slug(
@@ -107,7 +146,7 @@ class PropertyService:
             property_data: PropertyUpdate,
             user_id: UUID
     ) -> Optional[Property]:
-        """Update property"""
+        """Update property listing"""
         property_obj = await PropertyService.get_by_id(db, property_id)
 
         if not property_obj:
@@ -134,6 +173,11 @@ class PropertyService:
 
         await db.flush()
         await db.refresh(property_obj)
+
+        # Invalidate caches
+        await cache_service.invalidate_property(str(property_id))
+        await cache_service.invalidate_search_cache()
+
         return property_obj
 
     @staticmethod
@@ -158,6 +202,11 @@ class PropertyService:
         property_obj.deleted_at = datetime.utcnow()
         property_obj.status = PropertyStatus.EXPIRED
         await db.flush()
+
+        # Invalidate caches
+        await cache_service.invalidate_property(str(property_id))
+        await cache_service.invalidate_search_cache()
+
         return True
 
     @staticmethod
@@ -198,77 +247,260 @@ class PropertyService:
 
         await db.flush()
         await db.refresh(property_obj)
+
+        # Invalidate search cache
+        await cache_service.invalidate_search_cache()
+
         return property_obj
 
     @staticmethod
     async def search_properties(
             db: AsyncSession,
-            params: PropertySearchParams
-    ) -> tuple[List[Property], int]:
-        """Search properties with filters and pagination"""
+            params: PropertySearchParams,
+            user_id: Optional[UUID] = None
+    ) -> Tuple[List[Property], int, float]:
+        """
+        Advanced property search with caching
 
-        # Base query - only active, published, non-deleted properties
+        Returns:
+            Tuple of (properties, total_count, execution_time_ms)
+        """
+        start_time = time.time()
+
+        # Try cache first
+        cache_key_params = params.model_dump(exclude_none=True)
+        if cache_service.is_available():
+            cached = await cache_service.get_search_results(cache_key_params)
+            if cached:
+                execution_time = (time.time() - start_time) * 1000
+                return cached.get('properties', []), cached.get('total', 0), execution_time
+
+        # Build base query
         query = select(Property).where(
             and_(
-                Property.status == PropertyStatus.ACTIVE,
                 Property.deleted_at.is_(None),
                 Property.published_at.isnot(None)
             )
         )
 
-        # Apply filters
-        if params.city:
+        # Status filter
+        if params.exclude_sold_rented:
+            query = query.where(Property.status == PropertyStatus.ACTIVE)
+        else:
+            query = query.where(Property.status.in_([
+                PropertyStatus.ACTIVE,
+                PropertyStatus.SOLD,
+                PropertyStatus.RENTED
+            ]))
+
+        # FULL-TEXT SEARCH
+        if params.search_text:
+            # Use PostgreSQL full-text search with Romanian language support
+            search_query = params.search_text.replace(' ', ' & ')
+            query = query.where(
+                text(f"search_vector @@ to_tsquery('romanian', :search_text)")
+            ).params(search_text=search_query)
+
+        # LOCATION FILTERS
+        if params.cities:
+            query = query.where(Property.city.in_(params.cities))
+        elif params.city:
             query = query.where(Property.city.ilike(f"%{params.city}%"))
 
+        if params.county:
+            query = query.where(Property.county.ilike(f"%{params.county}%"))
+
+        if params.neighborhood:
+            query = query.where(Property.neighborhood.ilike(f"%{params.neighborhood}%"))
+
+        # GEOSPATIAL FILTERS
+        if params.latitude and params.longitude and params.radius_km:
+            # Radius search using PostGIS
+            point = ST_SetSRID(ST_MakePoint(params.longitude, params.latitude), 4326)
+            radius_meters = params.radius_km * 1000
+            query = query.where(
+                ST_DWithin(
+                    Property.location.cast(text('geography')),
+                    point.cast(text('geography')),
+                    radius_meters
+                )
+            )
+
+        # Bounding box search (for map viewport)
+        if all([params.ne_lat, params.ne_lng, params.sw_lat, params.sw_lng]):
+            envelope = ST_MakeEnvelope(
+                params.sw_lng, params.sw_lat,
+                params.ne_lng, params.ne_lat,
+                4326
+            )
+            query = query.where(ST_Contains(envelope, Property.location))
+
+        # PROPERTY TYPE FILTERS
         if params.property_type:
             query = query.where(Property.property_type == params.property_type)
 
         if params.listing_type:
             query = query.where(Property.listing_type == params.listing_type)
 
+        # PRICE FILTERS
         if params.min_price:
             query = query.where(Property.price >= params.min_price)
 
         if params.max_price:
             query = query.where(Property.price <= params.max_price)
 
+        # ROOM FILTERS
         if params.min_rooms:
             query = query.where(Property.rooms >= params.min_rooms)
 
         if params.max_rooms:
             query = query.where(Property.rooms <= params.max_rooms)
 
+        if params.min_bedrooms:
+            query = query.where(Property.bedrooms >= params.min_bedrooms)
+
+        if params.max_bedrooms:
+            query = query.where(Property.bedrooms <= params.max_bedrooms)
+
+        if params.min_bathrooms:
+            query = query.where(Property.bathrooms >= params.min_bathrooms)
+
+        if params.max_bathrooms:
+            query = query.where(Property.bathrooms <= params.max_bathrooms)
+
+        # AREA FILTERS
         if params.min_area:
             query = query.where(Property.total_area >= params.min_area)
 
         if params.max_area:
             query = query.where(Property.total_area <= params.max_area)
 
-        # Count total
-        from sqlalchemy import func as sa_func
+        # FLOOR FILTERS
+        if params.min_floor is not None:
+            query = query.where(Property.floor >= params.min_floor)
+
+        if params.max_floor is not None:
+            query = query.where(Property.floor <= params.max_floor)
+
+        # YEAR BUILT FILTERS
+        if params.min_year_built:
+            query = query.where(Property.year_built >= params.min_year_built)
+
+        if params.max_year_built:
+            query = query.where(Property.year_built <= params.max_year_built)
+
+        # FEATURE FILTERS (boolean)
+        if params.has_parking is not None:
+            query = query.where(Property.parking_spots > 0) if params.has_parking else query
+
+        if params.has_garage is not None:
+            query = query.where(Property.has_garage == params.has_garage)
+
+        if params.has_balcony is not None:
+            query = query.where(Property.balconies > 0) if params.has_balcony else query
+
+        if params.has_terrace is not None:
+            query = query.where(Property.has_terrace == params.has_terrace)
+
+        if params.has_garden is not None:
+            query = query.where(Property.has_garden == params.has_garden)
+
+        if params.is_furnished is not None:
+            query = query.where(Property.is_furnished == params.is_furnished)
+
+        # ENERGY RATING
+        if params.energy_rating:
+            query = query.where(Property.energy_rating == params.energy_rating)
+
+        # OWNER FILTER
+        if params.owner_id:
+            query = query.where(Property.owner_id == params.owner_id)
+
+        # TIME-BASED FILTER
+        if params.posted_since_days:
+            cutoff_date = datetime.utcnow() - timedelta(days=params.posted_since_days)
+            query = query.where(Property.published_at >= cutoff_date)
+
+        # COUNT TOTAL (before pagination)
         count_query = select(sa_func.count()).select_from(query.subquery())
         total_result = await db.execute(count_query)
         total = total_result.scalar_one()
 
-        # Apply sorting
+        # SORTING
         if params.sort_by == "newest":
-            query = query.order_by(Property.created_at.desc())
+            query = query.order_by(Property.published_at.desc())
+        elif params.sort_by == "oldest":
+            query = query.order_by(Property.published_at.asc())
         elif params.sort_by == "price_asc":
             query = query.order_by(Property.price.asc())
         elif params.sort_by == "price_desc":
             query = query.order_by(Property.price.desc())
         elif params.sort_by == "area_desc":
             query = query.order_by(Property.total_area.desc())
+        elif params.sort_by == "distance" and params.latitude and params.longitude:
+            # Sort by distance from point
+            point = ST_SetSRID(ST_MakePoint(params.longitude, params.latitude), 4326)
+            query = query.order_by(
+                ST_Distance(Property.location.cast(text('geography')), point.cast(text('geography')))
+            )
+        elif params.sort_by == "relevance" and params.search_text:
+            # Sort by full-text search relevance
+            search_query = params.search_text.replace(' ', ' & ')
+            query = query.order_by(
+                text(f"ts_rank(search_vector, to_tsquery('romanian', :search_text)) DESC")
+            ).params(search_text=search_query)
 
-        # Apply pagination
+        # PAGINATION
         offset = (params.page - 1) * params.page_size
         query = query.offset(offset).limit(params.page_size)
 
-        # Execute query
+        # EXECUTE QUERY
         result = await db.execute(query)
-        properties = result.scalars().all()
+        properties = list(result.scalars().all())
 
-        return list(properties), total
+        # Calculate execution time
+        execution_time = (time.time() - start_time) * 1000
+
+        # Cache results
+        if cache_service.is_available():
+            await cache_service.set_search_results(
+                cache_key_params,
+                {
+                    'properties': properties,
+                    'total': total,
+                    'execution_time_ms': execution_time
+                },
+                ttl=settings.SEARCH_CACHE_TTL
+            )
+
+        # Track search analytics (async, don't await)
+        if params.search_text:
+            await cache_service.increment_search_count(params.search_text)
+
+        return properties, total, execution_time
+
+    @staticmethod
+    async def track_search_query(
+            db: AsyncSession,
+            params: PropertySearchParams,
+            result_count: int,
+            execution_time_ms: float,
+            user_id: Optional[UUID] = None,
+            ip_address: Optional[str] = None,
+            user_agent: Optional[str] = None
+    ):
+        """Track search query for analytics"""
+        search_log = SearchQuery(
+            user_id=user_id,
+            search_text=params.search_text,
+            filters=params.model_dump(exclude_none=True),
+            result_count=result_count,
+            execution_time_ms=int(execution_time_ms),
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        db.add(search_log)
+        await db.flush()
 
 
 property_service = PropertyService()

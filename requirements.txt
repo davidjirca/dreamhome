@@ -29,5 +29,6 @@ httpx==0.28.1
 # Utilities
 python-dateutil==2.9.0.post0
 cloudinary==1.44.1
-GeoAlchemy2==0.15.2
+GeoAlchemy2==0.18.1
 geopy==2.4.1
+redis==7.1.0
