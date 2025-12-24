@@ -54,137 +54,9 @@ async def get_current_user_optional(
         return None
 
 
-@router.post("", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
-async def create_property(
-        property_data: PropertyCreate,
-        current_user: User = Depends(require_agent_or_owner),
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Create new property listing
-
-    Requires: Owner, Agent, or Admin role
-
-    **Features:**
-    - Automatic geocoding (if coordinates provided)
-    - Slug generation
-    - Price per sqm calculation
-    - Cache invalidation
-    """
-    property_obj = await property_service.create_property(
-        db,
-        property_data,
-        current_user.id
-    )
-    return property_obj
-
-
-@router.get("/{property_id}", response_model=PropertyResponse)
-async def get_property(
-        property_id: UUID,
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Get property by ID
-
-    **Features:**
-    - Property caching (1 hour TTL)
-    - Increments view count
-    """
-    property_obj = await property_service.get_by_id(db, property_id)
-
-    if not property_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-
-    # Increment view count (async, don't block response)
-    property_obj.view_count += 1
-    asyncio.create_task(db.flush())
-
-    return property_obj
-
-
-@router.put("/{property_id}", response_model=PropertyResponse)
-async def update_property(
-        property_id: UUID,
-        property_data: PropertyUpdate,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Update property listing
-
-    **Features:**
-    - Ownership verification
-    - Cache invalidation (property + search)
-    """
-    property_obj = await property_service.update_property(
-        db,
-        property_id,
-        property_data,
-        current_user.id
-    )
-
-    if not property_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-
-    return property_obj
-
-
-@router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_property(
-        property_id: UUID,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Soft delete property
-
-    **Features:**
-    - Ownership verification
-    - Cache invalidation
-    """
-    success = await property_service.delete_property(
-        db,
-        property_id,
-        current_user.id
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-
-
-@router.post("/{property_id}/publish", response_model=PropertyResponse)
-async def publish_property(
-        property_id: UUID,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Publish property listing
-
-    **Validation:**
-    - Requires at least one photo
-    - Sets expiry date (60 days by default)
-
-    **Features:**
-    - Cache invalidation
-    """
-    property_obj = await property_service.publish_property(
-        db,
-        property_id,
-        current_user.id
-    )
-    return property_obj
-
+# ==========================================
+# SPECIFIC ROUTES (MUST COME FIRST)
+# ==========================================
 
 @router.get("/search", response_model=PropertySearchResponse)
 async def search_properties(
@@ -612,3 +484,179 @@ async def get_cache_stats(
     """
     stats = await cache_service.get_cache_stats()
     return stats
+
+
+# ==========================================
+# DYNAMIC PARAMETER ROUTES (MUST COME AFTER SPECIFIC ROUTES)
+# ==========================================
+
+@router.post("", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
+async def create_property(
+        property_data: PropertyCreate,
+        current_user: User = Depends(require_agent_or_owner),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Create new property listing
+
+    Requires: Owner, Agent, or Admin role
+
+    **Features:**
+    - Automatic geocoding (if coordinates provided)
+    - Slug generation
+    - Price per sqm calculation
+    - Cache invalidation
+    """
+    property_obj = await property_service.create_property(
+        db,
+        property_data,
+        current_user.id
+    )
+    return property_obj
+
+
+@router.get("/{property_id}", response_model=PropertyResponse)
+async def get_property(
+        property_id: UUID,
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Get property by ID
+
+    **Features:**
+    - Property caching (1 hour TTL)
+    - Increments view count
+    """
+    property_obj = await property_service.get_by_id(db, property_id)
+
+    if not property_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    # Increment view count (async, don't block response)
+    property_obj.view_count += 1
+    asyncio.create_task(db.flush())
+
+    return property_obj
+
+
+@router.put("/{property_id}", response_model=PropertyResponse)
+async def update_property(
+        property_id: UUID,
+        property_data: PropertyUpdate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Update property listing
+
+    **Features:**
+    - Ownership verification
+    - Cache invalidation (property + search)
+    """
+    property_obj = await property_service.update_property(
+        db,
+        property_id,
+        property_data,
+        current_user.id
+    )
+
+    if not property_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    return property_obj
+
+
+@router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_property(
+        property_id: UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Soft delete property
+
+    **Features:**
+    - Ownership verification
+    - Cache invalidation
+    """
+    success = await property_service.delete_property(
+        db,
+        property_id,
+        current_user.id
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+
+@router.post("/{property_id}/publish", response_model=PropertyResponse)
+async def publish_property(
+        property_id: UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Publish property listing
+
+    **Validation:**
+    - Requires at least one photo
+    - Sets expiry date (60 days by default)
+
+    **Features:**
+    - Cache invalidation
+    """
+    property_obj = await property_service.publish_property(
+        db,
+        property_id,
+        current_user.id
+    )
+    return property_obj
+
+
+@router.post("/{property_id}/unpublish", response_model=PropertyResponse)
+async def unpublish_property(
+        property_id: UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Unpublish property listing (set to inactive)
+
+    **Features:**
+    - Ownership verification
+    - Cache invalidation
+    """
+    property_obj = await property_service.get_by_id(db, property_id)
+
+    if not property_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    # Check ownership
+    if property_obj.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to unpublish this property"
+        )
+
+    # Update status
+    property_obj.status = PropertyStatus.DRAFT
+    await db.flush()
+    await db.refresh(property_obj)
+
+    # Invalidate cache
+    await cache_service.invalidate_property(str(property_id))
+    await cache_service.invalidate_search_cache()
+
+    return property_obj

@@ -50,14 +50,14 @@ class Property(Base):
     status = Column(SQLEnum(PropertyStatus), default=PropertyStatus.DRAFT, nullable=False, index=True)
 
     # Pricing
-    price = Column(Numeric(12, 2), nullable=False, index=True)
-    price_per_sqm = Column(Numeric(10, 2), nullable=True)
+    price = Column(Integer, nullable=False, index=True)  # Whole number prices in RON/EUR
+    price_per_sqm = Column(Numeric(10, 2), nullable=True)  # Can have decimals (e.g., 1250.50)
     currency = Column(String(3), default="RON", nullable=False)
     negotiable = Column(Boolean, default=False, nullable=False)
 
-    # Details
-    total_area = Column(Numeric(10, 2), nullable=False)
-    usable_area = Column(Numeric(10, 2), nullable=True)
+    # Details (area in square meters - whole numbers)
+    total_area = Column(Integer, nullable=False)
+    usable_area = Column(Integer, nullable=True)
     rooms = Column(Integer, nullable=False, index=True)
     bedrooms = Column(Integer, nullable=False)
     bathrooms = Column(Integer, nullable=False)

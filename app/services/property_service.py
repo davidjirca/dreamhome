@@ -32,8 +32,17 @@ class PropertyService:
         return slug
 
     @staticmethod
-    def calculate_price_per_sqm(price: float, area: float) -> float:
-        """Calculate price per square meter"""
+    def calculate_price_per_sqm(price: int, area: int) -> float:
+        """
+        Calculate price per square meter (integer)
+        
+        Args:
+            price: Total price (integer)
+            area: Total area in square meters (integer)
+        
+        Returns:
+            Price per square meter (integer, rounded)
+        """
         if area > 0:
             return round(price / area, 2)
         return 0.0
@@ -49,10 +58,10 @@ class PropertyService:
         # Create property instance
         property_dict = property_data.model_dump()
 
-        # Calculate price per sqm
+        # Calculate price per sqm (integer)
         price_per_sqm = PropertyService.calculate_price_per_sqm(
-            float(property_dict['price']),
-            float(property_dict['total_area'])
+            property_dict['price'],
+            property_dict['total_area']
         )
 
         # Handle geolocation
@@ -117,7 +126,8 @@ class PropertyService:
                 {
                     "id": str(property_obj.id),
                     "title": property_obj.title,
-                    "price": float(property_obj.price),
+                    "price": property_obj.price,
+                    "price_per_sqm": property_obj.price_per_sqm,
                     # ... add other fields as needed
                 },
                 ttl=settings.PROPERTY_CACHE_TTL
@@ -167,8 +177,8 @@ class PropertyService:
         # Recalculate price_per_sqm if needed
         if 'price' in update_data or 'total_area' in update_data:
             property_obj.price_per_sqm = PropertyService.calculate_price_per_sqm(
-                float(property_obj.price),
-                float(property_obj.total_area)
+                property_obj.price,
+                property_obj.total_area
             )
 
         await db.flush()
@@ -342,11 +352,11 @@ class PropertyService:
         if params.listing_type:
             query = query.where(Property.listing_type == params.listing_type)
 
-        # PRICE FILTERS
-        if params.min_price:
+        # PRICE FILTERS (integers)
+        if params.min_price is not None:
             query = query.where(Property.price >= params.min_price)
 
-        if params.max_price:
+        if params.max_price is not None:
             query = query.where(Property.price <= params.max_price)
 
         # ROOM FILTERS
@@ -356,10 +366,10 @@ class PropertyService:
         if params.max_rooms:
             query = query.where(Property.rooms <= params.max_rooms)
 
-        if params.min_bedrooms:
+        if params.min_bedrooms is not None:
             query = query.where(Property.bedrooms >= params.min_bedrooms)
 
-        if params.max_bedrooms:
+        if params.max_bedrooms is not None:
             query = query.where(Property.bedrooms <= params.max_bedrooms)
 
         if params.min_bathrooms:
@@ -368,11 +378,11 @@ class PropertyService:
         if params.max_bathrooms:
             query = query.where(Property.bathrooms <= params.max_bathrooms)
 
-        # AREA FILTERS
-        if params.min_area:
+        # AREA FILTERS (integers)
+        if params.min_area is not None:
             query = query.where(Property.total_area >= params.min_area)
 
-        if params.max_area:
+        if params.max_area is not None:
             query = query.where(Property.total_area <= params.max_area)
 
         # FLOOR FILTERS

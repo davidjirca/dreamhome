@@ -1,5 +1,5 @@
 """
-Database Seeding Script for imobplan
+Database Seeding Script for dreamhome
 Generates realistic property data for testing
 
 Usage:
@@ -10,7 +10,6 @@ Usage:
 import asyncio
 import random
 from datetime import datetime, timedelta
-from decimal import Decimal
 from uuid import UUID
 import sys
 import os
@@ -141,50 +140,50 @@ ENERGY_RATINGS = ["A++", "A+", "A", "B", "C", "D", "E"]
 # Unsplash photo collections for different property types
 PROPERTY_PHOTOS = {
     PropertyType.APARTMENT: [
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",  # Modern apartment
-        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",  # Living room
-        "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop",  # Kitchen
-        "https://images.unsplash.com/photo-1564078516393-cf04bd966897?w=800&h=600&fit=crop",  # Bedroom
-        "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=800&h=600&fit=crop",  # Bathroom
-        "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800&h=600&fit=crop",  # Balcony
-        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop",  # Dining
-        "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&h=600&fit=crop",  # Interior
+        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1564078516393-cf04bd966897?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&h=600&fit=crop",
     ],
     PropertyType.HOUSE: [
-        "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&h=600&fit=crop",  # House exterior
-        "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop",  # Modern house
-        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop",  # Living room
-        "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800&h=600&fit=crop",  # Kitchen
-        "https://images.unsplash.com/photo-1600121848594-d8644e57abab?w=800&h=600&fit=crop",  # Bedroom
-        "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=800&h=600&fit=crop",  # Garden
-        "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800&h=600&fit=crop",  # Backyard
-        "https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=800&h=600&fit=crop",  # Interior
+        "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600121848594-d8644e57abab?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=800&h=600&fit=crop",
     ],
     PropertyType.STUDIO: [
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",  # Studio apartment
-        "https://images.unsplash.com/photo-1536376072261-38c75010e6c9?w=800&h=600&fit=crop",  # Compact living
-        "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?w=800&h=600&fit=crop",  # Small kitchen
-        "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&h=600&fit=crop",  # Studio interior
-        "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=800&h=600&fit=crop",  # Bathroom
+        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1536376072261-38c75010e6c9?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=800&h=600&fit=crop",
     ],
     PropertyType.PENTHOUSE: [
-        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop",  # Luxury interior
-        "https://images.unsplash.com/photo-1600210492493-0946911123ea?w=800&h=600&fit=crop",  # Terrace view
-        "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&h=600&fit=crop",  # Modern living
-        "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?w=800&h=600&fit=crop",  # Kitchen
-        "https://images.unsplash.com/photo-1600566752229-250ed79470e6?w=800&h=600&fit=crop",  # Master bedroom
-        "https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=800&h=600&fit=crop",  # Bathroom luxury
-        "https://images.unsplash.com/photo-1600563438938-a9a27216b4f5?w=800&h=600&fit=crop",  # City view
+        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600210492493-0946911123ea?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566752229-250ed79470e6?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600563438938-a9a27216b4f5?w=800&h=600&fit=crop",
     ],
     PropertyType.VILLA: [
-        "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=800&h=600&fit=crop",  # Villa exterior
-        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&h=600&fit=crop",  # Pool area
-        "https://images.unsplash.com/photo-1600585154363-67eb9e2e2099?w=800&h=600&fit=crop",  # Garden
-        "https://images.unsplash.com/photo-1600607687644-aac4c3eac7f4?w=800&h=600&fit=crop",  # Interior
-        "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=800&h=600&fit=crop",  # Living space
-        "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&h=600&fit=crop",  # Kitchen
-        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop",  # Bedroom
-        "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&h=600&fit=crop",  # Outdoor
+        "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600585154363-67eb9e2e2099?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600607687644-aac4c3eac7f4?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&h=600&fit=crop",
     ]
 }
 
@@ -231,7 +230,7 @@ async def create_users(db: AsyncSession, count: int = 10) -> list[User]:
     
     # Create admin user
     admin = User(
-        email="admin@imobplan.ro",
+        email="admin@dreamhome.ro",
         hashed_password=get_password_hash("Admin123!"),
         role=UserRole.ADMIN,
         first_name="Admin",
@@ -246,7 +245,7 @@ async def create_users(db: AsyncSession, count: int = 10) -> list[User]:
     # Create agents
     for i in range(count // 3):
         agent = User(
-            email=f"agent{i+1}@imobplan.ro",
+            email=f"agent{i+1}@dreamhome.ro",
             hashed_password=get_password_hash("Agent123!"),
             role=UserRole.AGENT,
             first_name=f"Agent{i+1}",
@@ -263,7 +262,7 @@ async def create_users(db: AsyncSession, count: int = 10) -> list[User]:
     # Create owners
     for i in range(count // 3):
         owner = User(
-            email=f"owner{i+1}@imobplan.ro",
+            email=f"owner{i+1}@dreamhome.ro",
             hashed_password=get_password_hash("Owner123!"),
             role=UserRole.OWNER,
             first_name=f"Proprietar{i+1}",
@@ -278,7 +277,7 @@ async def create_users(db: AsyncSession, count: int = 10) -> list[User]:
     # Create buyers
     for i in range(count - len(users)):
         buyer = User(
-            email=f"buyer{i+1}@imobplan.ro",
+            email=f"buyer{i+1}@dreamhome.ro",
             hashed_password=get_password_hash("Buyer123!"),
             role=UserRole.BUYER,
             first_name=f"Cumpărător{i+1}",
@@ -306,19 +305,19 @@ def generate_coordinates(base_lat: float, base_lng: float) -> tuple[float, float
     )
 
 
-def generate_property_title(prop_type: PropertyType, rooms: int, area: float, neighborhood: str) -> str:
+def generate_property_title(prop_type: PropertyType, rooms: int, area: int, neighborhood: str) -> str:
     """Generate realistic property title"""
     if prop_type in TITLE_TEMPLATES:
         template = random.choice(TITLE_TEMPLATES[prop_type])
         if prop_type == PropertyType.STUDIO:
-            return template.format(int(area), neighborhood)
+            return template.format(area, neighborhood)
         else:
-            return template.format(rooms, int(area), neighborhood)
-    return f"{prop_type.value.title()} {rooms} camere, {int(area)} mp, {neighborhood}"
+            return template.format(rooms, area, neighborhood)
+    return f"{prop_type.value.title()} {rooms} camere, {area} mp, {neighborhood}"
 
 
 async def create_properties(db: AsyncSession, users: list[User], count: int = 100) -> list[Property]:
-    """Create test properties with realistic data"""
+    """Create test properties with realistic data - ALL INTEGERS"""
     print(f"Creating {count} properties...")
     properties = []
     
@@ -341,28 +340,29 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
         # Get photos for this property type
         photos, main_photo = get_property_photos(prop_type)
         
-        # Size and rooms based on property type
+        # Size and rooms based on property type (ALL INTEGERS)
         if prop_type == PropertyType.STUDIO:
             rooms = 1
             bedrooms = 0
-            total_area = random.randint(25, 45)
+            total_area = random.randint(25, 45)  # Integer
         elif prop_type == PropertyType.APARTMENT:
             rooms = random.choice([2, 2, 3, 3, 3, 4, 4])
             bedrooms = rooms - 1
-            total_area = rooms * random.randint(20, 35)
+            total_area = rooms * random.randint(20, 35)  # Integer
         elif prop_type == PropertyType.HOUSE:
             rooms = random.choice([3, 4, 4, 5, 5, 6])
             bedrooms = rooms - 1
-            total_area = rooms * random.randint(25, 40)
+            total_area = rooms * random.randint(25, 40)  # Integer
         else:
             rooms = random.randint(2, 5)
             bedrooms = max(1, rooms - 1)
-            total_area = rooms * random.randint(20, 35)
+            total_area = rooms * random.randint(20, 35)  # Integer
         
-        usable_area = total_area * random.uniform(0.85, 0.95)
+        # Usable area (integer, slightly less than total)
+        usable_area = int(total_area * random.uniform(0.85, 0.95))
         bathrooms = 1 if rooms <= 2 else random.randint(1, 2)
         
-        # Price calculation (realistic Romanian market prices)
+        # Price calculation (realistic Romanian market prices - ALL INTEGERS)
         base_price_per_sqm = {
             "Bucharest": random.randint(1200, 2500),
             "Cluj-Napoca": random.randint(1500, 2800),
@@ -376,9 +376,14 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
         
         price_per_sqm = base_price_per_sqm.get(city_name, 1000)
         if listing_type == ListingType.RENT:
-            price = total_area * random.randint(4, 8)  # EUR per month
+            # Rent: EUR per month (integer)
+            price = total_area * random.randint(4, 8)
         else:
-            price = total_area * price_per_sqm * random.uniform(0.9, 1.1)
+            # Sale price: integer (no decimals)
+            price = int(total_area * price_per_sqm * random.uniform(0.9, 1.1))
+        
+        # Calculate price_per_sqm as integer
+        calculated_price_per_sqm = round(price / total_area)
         
         # Generate title
         title = generate_property_title(prop_type, rooms, total_area, neighborhood)
@@ -418,7 +423,7 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
         published_at = created_at + timedelta(days=random.randint(0, 3)) if status != PropertyStatus.DRAFT else None
         expires_at = published_at + timedelta(days=60) if published_at else None
         
-        # Create property
+        # Create property (ALL INTEGERS - no Decimal wrappers)
         prop = Property(
             owner_id=random.choice(property_owners).id,
             title=title,
@@ -426,12 +431,12 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
             property_type=prop_type,
             listing_type=listing_type,
             status=status,
-            price=Decimal(str(round(price, 2))),
-            price_per_sqm=Decimal(str(round(price / total_area, 2))),
+            price=price,  # Integer (no Decimal)
+            price_per_sqm=calculated_price_per_sqm,  # Integer (no Decimal)
             currency="EUR",
             negotiable=random.choice([True, False]),
-            total_area=Decimal(str(round(total_area, 2))),
-            usable_area=Decimal(str(round(usable_area, 2))),
+            total_area=total_area,  # Integer (no Decimal)
+            usable_area=usable_area,  # Integer (no Decimal)
             rooms=rooms,
             bedrooms=bedrooms,
             bathrooms=bathrooms,
@@ -451,8 +456,8 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
             county=city_data["county"],
             postal_code=f"{random.randint(100000, 999999)}",
             neighborhood=neighborhood,
-            latitude=Decimal(str(lat)),
-            longitude=Decimal(str(lng)),
+            latitude=lat,  # Store as float for now (coordinates)
+            longitude=lng,  # Store as float for now (coordinates)
             location=f"SRID=4326;POINT({lng} {lat})",
             photos=photos,
             main_photo=main_photo,
@@ -481,7 +486,7 @@ async def create_properties(db: AsyncSession, users: list[User], count: int = 10
 async def seed_database(users_count: int = 10, properties_count: int = 100, reset: bool = False):
     """Main seeding function"""
     print("=" * 60)
-    print("🌱 Database Seeding Script for imobplan")
+    print("🌱 Database Seeding Script for dreamhome")
     print("=" * 60)
     
     async with AsyncSessionLocal() as db:
@@ -518,10 +523,13 @@ async def seed_database(users_count: int = 10, properties_count: int = 100, rese
             print(f"  - Cities covered: {len(ROMANIAN_CITIES)}")
             print()
             print("🔐 Test Credentials:")
-            print("  Admin:  admin@imobplan.ro / Admin123!")
-            print("  Agent:  agent1@imobplan.ro / Agent123!")
-            print("  Owner:  owner1@imobplan.ro / Owner123!")
-            print("  Buyer:  buyer1@imobplan.ro / Buyer123!")
+            print("  Admin:  admin@dreamhome.ro / Admin123!")
+            print("  Agent:  agent1@dreamhome.ro / Agent123!")
+            print("  Owner:  owner1@dreamhome.ro / Owner123!")
+            print("  Buyer:  buyer1@dreamhome.ro / Buyer123!")
+            print()
+            print("💰 All prices are now INTEGERS (no decimals)!")
+            print("   Example: 150000 EUR (not 150000.47)")
             print()
             
         except Exception as e:

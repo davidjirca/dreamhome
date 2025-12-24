@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
-from decimal import Decimal
 from app.models.property import PropertyType, PropertyStatus, ListingType
 
 
@@ -12,11 +11,11 @@ class PropertyBase(BaseModel):
     description: Optional[str] = None
     property_type: PropertyType
     listing_type: ListingType
-    price: Decimal = Field(..., gt=0)
+    price: int = Field(..., gt=0, description="Price in EUR or RON (whole number)")
     currency: str = "RON"
     negotiable: bool = False
-    total_area: Decimal = Field(..., gt=0)
-    usable_area: Optional[Decimal] = None
+    total_area: int = Field(..., gt=0, description="Total area in square meters (whole number)")
+    usable_area: Optional[int] = Field(None, gt=0, description="Usable area in square meters")
     rooms: int = Field(..., ge=1)
     bedrooms: int = Field(..., ge=0)
     bathrooms: int = Field(..., ge=1)
@@ -36,8 +35,8 @@ class PropertyBase(BaseModel):
     county: str
     postal_code: Optional[str] = None
     neighborhood: Optional[str] = None
-    latitude: Optional[Decimal] = None
-    longitude: Optional[Decimal] = None
+    latitude: Optional[float] = None  # Accept float from user, convert internally
+    longitude: Optional[float] = None  # Accept float from user, convert internally
 
 
 # Request schemas
@@ -55,16 +54,44 @@ class PropertyCreate(PropertyBase):
         if v and 'total_area' in values and v > values['total_area']:
             raise ValueError('Usable area cannot be greater than total area')
         return v
+    
+    @validator('price')
+    def validate_price(cls, v):
+        if v <= 0:
+            raise ValueError('Price must be a positive integer')
+        return v
 
 
 class PropertyUpdate(BaseModel):
     """Schema for updating a property"""
     title: Optional[str] = None
     description: Optional[str] = None
-    price: Optional[Decimal] = None
+    price: Optional[int] = None
     negotiable: Optional[bool] = None
     status: Optional[PropertyStatus] = None
-    # ... add all optional fields
+    total_area: Optional[int] = None
+    usable_area: Optional[int] = None
+    rooms: Optional[int] = Field(None, ge=1)
+    bedrooms: Optional[int] = Field(None, ge=0)
+    bathrooms: Optional[int] = Field(None, ge=1)
+    floor: Optional[int] = None
+    total_floors: Optional[int] = None
+    year_built: Optional[int] = None
+    balconies: Optional[int] = Field(None, ge=0)
+    parking_spots: Optional[int] = Field(None, ge=0)
+    has_garage: Optional[bool] = None
+    has_terrace: Optional[bool] = None
+    has_garden: Optional[bool] = None
+    is_furnished: Optional[bool] = None
+    heating_type: Optional[str] = None
+    energy_rating: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    postal_code: Optional[str] = None
+    neighborhood: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 # Response schemas
@@ -73,7 +100,7 @@ class PropertyResponse(PropertyBase):
     id: UUID
     owner_id: UUID
     status: PropertyStatus
-    price_per_sqm: Optional[Decimal]
+    price_per_sqm: Optional[float]
     photos: List[str]
     main_photo: Optional[str]
     photo_count: int
@@ -95,9 +122,9 @@ class PropertyListItem(BaseModel):
     title: str
     property_type: PropertyType
     listing_type: ListingType
-    price: Decimal
-    price_per_sqm: Optional[Decimal]
-    total_area: Decimal
+    price: int
+    price_per_sqm: Optional[float]
+    total_area: int
     rooms: int
     bedrooms: int
     city: str
@@ -106,7 +133,7 @@ class PropertyListItem(BaseModel):
     slug: str
     created_at: datetime
 
-    # NEW: Additional fields for search results
+    # Additional fields for search results
     distance_km: Optional[float] = None  # Distance from search point
     relevance_score: Optional[float] = None  # Full-text search relevance
     days_online: Optional[int] = None  # Days since published
@@ -142,9 +169,9 @@ class PropertySearchParams(BaseModel):
     property_type: Optional[PropertyType] = None
     listing_type: Optional[ListingType] = None
 
-    # Price filters
-    min_price: Optional[Decimal] = Field(None, ge=0)
-    max_price: Optional[Decimal] = Field(None, ge=0)
+    # Price filters (integers)
+    min_price: Optional[int] = Field(None, ge=0)
+    max_price: Optional[int] = Field(None, ge=0)
 
     # Room filters
     min_rooms: Optional[int] = Field(None, ge=1)
@@ -154,9 +181,9 @@ class PropertySearchParams(BaseModel):
     min_bathrooms: Optional[int] = Field(None, ge=1)
     max_bathrooms: Optional[int] = Field(None, ge=1)
 
-    # Area filters
-    min_area: Optional[Decimal] = Field(None, ge=0)
-    max_area: Optional[Decimal] = Field(None, ge=0)
+    # Area filters (integers)
+    min_area: Optional[int] = Field(None, ge=0)
+    max_area: Optional[int] = Field(None, ge=0)
 
     # Floor filters
     min_floor: Optional[int] = None
@@ -169,7 +196,7 @@ class PropertySearchParams(BaseModel):
     # Feature filters (boolean)
     has_parking: Optional[bool] = None
     has_garage: Optional[bool] = None
-    has_balcony: Optional[bool] = None  # Need to add balconies > 0 check
+    has_balcony: Optional[bool] = None
     has_terrace: Optional[bool] = None
     has_garden: Optional[bool] = None
     is_furnished: Optional[bool] = None
@@ -208,6 +235,12 @@ class PropertySearchParams(BaseModel):
             raise ValueError('max_rooms must be greater than min_rooms')
         return v
 
+    @validator('max_area')
+    def validate_area_range(cls, v, values):
+        if v and 'min_area' in values and values['min_area'] and v < values['min_area']:
+            raise ValueError('max_area must be greater than min_area')
+        return v
+
     @validator('sort_by')
     def validate_sort(cls, v):
         valid_sorts = ['newest', 'oldest', 'price_asc', 'price_desc', 'area_desc', 'distance', 'relevance']
@@ -224,7 +257,7 @@ class PropertySearchResponse(BaseModel):
     page_size: int
     total_pages: int
 
-    # NEW: Search metadata
+    # Search metadata
     filters_applied: Dict[str, Any] = Field(default_factory=dict, description="Active filters")
     search_time_ms: Optional[float] = Field(None, description="Query execution time")
     cached: bool = Field(False, description="Whether results came from cache")
