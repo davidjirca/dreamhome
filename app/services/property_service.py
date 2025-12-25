@@ -2,7 +2,7 @@ from typing import Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func as sa_func, text
+from sqlalchemy import select, and_, or_, func as sa_func, desc, asc
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from geoalchemy2.functions import ST_DWithin, ST_MakeEnvelope, ST_Contains, ST_Distance, ST_SetSRID, ST_MakePoint
@@ -32,17 +32,8 @@ class PropertyService:
         return slug
 
     @staticmethod
-    def calculate_price_per_sqm(price: int, area: int) -> float:
-        """
-        Calculate price per square meter (integer)
-        
-        Args:
-            price: Total price (integer)
-            area: Total area in square meters (integer)
-        
-        Returns:
-            Price per square meter (integer, rounded)
-        """
+    def calculate_price_per_sqm(price: float, area: float) -> float:
+        """Calculate price per square meter"""
         if area > 0:
             return round(price / area, 2)
         return 0.0
@@ -58,10 +49,10 @@ class PropertyService:
         # Create property instance
         property_dict = property_data.model_dump()
 
-        # Calculate price per sqm (integer)
+        # Calculate price per sqm
         price_per_sqm = PropertyService.calculate_price_per_sqm(
-            property_dict['price'],
-            property_dict['total_area']
+            float(property_dict['price']),
+            float(property_dict['total_area'])
         )
 
         # Handle geolocation
@@ -126,8 +117,7 @@ class PropertyService:
                 {
                     "id": str(property_obj.id),
                     "title": property_obj.title,
-                    "price": property_obj.price,
-                    "price_per_sqm": property_obj.price_per_sqm,
+                    "price": float(property_obj.price),
                     # ... add other fields as needed
                 },
                 ttl=settings.PROPERTY_CACHE_TTL
@@ -177,8 +167,8 @@ class PropertyService:
         # Recalculate price_per_sqm if needed
         if 'price' in update_data or 'total_area' in update_data:
             property_obj.price_per_sqm = PropertyService.calculate_price_per_sqm(
-                property_obj.price,
-                property_obj.total_area
+                float(property_obj.price),
+                float(property_obj.total_area)
             )
 
         await db.flush()
@@ -270,7 +260,7 @@ class PropertyService:
             user_id: Optional[UUID] = None
     ) -> Tuple[List[Property], int, float]:
         """
-        Advanced property search with caching
+        Advanced property search with caching - FIXED VERSION
 
         Returns:
             Tuple of (properties, total_count, execution_time_ms)
@@ -303,18 +293,39 @@ class PropertyService:
                 PropertyStatus.RENTED
             ]))
 
-        # FULL-TEXT SEARCH
+        # FULL-TEXT SEARCH - FIXED
+        search_rank_expr = None
         if params.search_text:
-            # Use PostgreSQL full-text search with Romanian language support
-            search_query = params.search_text.replace(' ', ' & ')
+            # Clean and prepare search text
+            search_text = params.search_text.strip()
+            
+            # Split into terms and use OR logic for better recall
+            # This allows "spațios luminos" to find properties with either word
+            search_terms = search_text.split()
+            search_query = ' | '.join(search_terms)  # OR between terms
+            # For AND logic (all words must match), use: ' & '.join(search_terms)
+            
+            # Use to_tsquery with proper SQLAlchemy integration
+            tsquery = sa_func.to_tsquery('romanian', search_query)
+            
+            # Apply full-text search filter
+            # Property.search_vector is the generated column from migration 003
             query = query.where(
-                text(f"search_vector @@ to_tsquery('romanian', :search_text)")
-            ).params(search_text=search_query)
+                Property.search_vector.op('@@')(tsquery)
+            )
+            
+            # Store rank expression for relevance sorting
+            search_rank_expr = sa_func.ts_rank(
+                Property.search_vector,
+                tsquery
+            )
 
         # LOCATION FILTERS
         if params.cities:
+            # Exact match for list of cities
             query = query.where(Property.city.in_(params.cities))
         elif params.city:
+            # Case-insensitive partial match for single city
             query = query.where(Property.city.ilike(f"%{params.city}%"))
 
         if params.county:
@@ -328,10 +339,11 @@ class PropertyService:
             # Radius search using PostGIS
             point = ST_SetSRID(ST_MakePoint(params.longitude, params.latitude), 4326)
             radius_meters = params.radius_km * 1000
+            
             query = query.where(
                 ST_DWithin(
-                    Property.location.cast(text('geography')),
-                    point.cast(text('geography')),
+                    Property.location,
+                    point,
                     radius_meters
                 )
             )
@@ -352,7 +364,7 @@ class PropertyService:
         if params.listing_type:
             query = query.where(Property.listing_type == params.listing_type)
 
-        # PRICE FILTERS (integers)
+        # PRICE FILTERS
         if params.min_price is not None:
             query = query.where(Property.price >= params.min_price)
 
@@ -360,10 +372,10 @@ class PropertyService:
             query = query.where(Property.price <= params.max_price)
 
         # ROOM FILTERS
-        if params.min_rooms:
+        if params.min_rooms is not None:
             query = query.where(Property.rooms >= params.min_rooms)
 
-        if params.max_rooms:
+        if params.max_rooms is not None:
             query = query.where(Property.rooms <= params.max_rooms)
 
         if params.min_bedrooms is not None:
@@ -372,13 +384,13 @@ class PropertyService:
         if params.max_bedrooms is not None:
             query = query.where(Property.bedrooms <= params.max_bedrooms)
 
-        if params.min_bathrooms:
+        if params.min_bathrooms is not None:
             query = query.where(Property.bathrooms >= params.min_bathrooms)
 
-        if params.max_bathrooms:
+        if params.max_bathrooms is not None:
             query = query.where(Property.bathrooms <= params.max_bathrooms)
 
-        # AREA FILTERS (integers)
+        # AREA FILTERS
         if params.min_area is not None:
             query = query.where(Property.total_area >= params.min_area)
 
@@ -393,21 +405,27 @@ class PropertyService:
             query = query.where(Property.floor <= params.max_floor)
 
         # YEAR BUILT FILTERS
-        if params.min_year_built:
+        if params.min_year_built is not None:
             query = query.where(Property.year_built >= params.min_year_built)
 
-        if params.max_year_built:
+        if params.max_year_built is not None:
             query = query.where(Property.year_built <= params.max_year_built)
 
         # FEATURE FILTERS (boolean)
         if params.has_parking is not None:
-            query = query.where(Property.parking_spots > 0) if params.has_parking else query
+            if params.has_parking:
+                query = query.where(Property.parking_spots > 0)
+            else:
+                query = query.where(Property.parking_spots == 0)
 
         if params.has_garage is not None:
             query = query.where(Property.has_garage == params.has_garage)
 
         if params.has_balcony is not None:
-            query = query.where(Property.balconies > 0) if params.has_balcony else query
+            if params.has_balcony:
+                query = query.where(Property.balconies > 0)
+            else:
+                query = query.where(Property.balconies == 0)
 
         if params.has_terrace is not None:
             query = query.where(Property.has_terrace == params.has_terrace)
@@ -436,29 +454,28 @@ class PropertyService:
         total_result = await db.execute(count_query)
         total = total_result.scalar_one()
 
-        # SORTING
+        # SORTING - FIXED
         if params.sort_by == "newest":
-            query = query.order_by(Property.published_at.desc())
+            query = query.order_by(desc(Property.published_at))
         elif params.sort_by == "oldest":
-            query = query.order_by(Property.published_at.asc())
+            query = query.order_by(asc(Property.published_at))
         elif params.sort_by == "price_asc":
-            query = query.order_by(Property.price.asc())
+            query = query.order_by(asc(Property.price))
         elif params.sort_by == "price_desc":
-            query = query.order_by(Property.price.desc())
+            query = query.order_by(desc(Property.price))
         elif params.sort_by == "area_desc":
-            query = query.order_by(Property.total_area.desc())
+            query = query.order_by(desc(Property.total_area))
         elif params.sort_by == "distance" and params.latitude and params.longitude:
             # Sort by distance from point
             point = ST_SetSRID(ST_MakePoint(params.longitude, params.latitude), 4326)
-            query = query.order_by(
-                ST_Distance(Property.location.cast(text('geography')), point.cast(text('geography')))
-            )
-        elif params.sort_by == "relevance" and params.search_text:
-            # Sort by full-text search relevance
-            search_query = params.search_text.replace(' ', ' & ')
-            query = query.order_by(
-                text(f"ts_rank(search_vector, to_tsquery('romanian', :search_text)) DESC")
-            ).params(search_text=search_query)
+            distance_expr = ST_Distance(Property.location, point)
+            query = query.order_by(asc(distance_expr))
+        elif params.sort_by == "relevance" and search_rank_expr is not None:
+            # Use the rank expression created during text search
+            query = query.order_by(desc(search_rank_expr))
+        else:
+            # Default to newest
+            query = query.order_by(desc(Property.published_at))
 
         # PAGINATION
         offset = (params.page - 1) * params.page_size

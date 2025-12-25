@@ -132,6 +132,12 @@ class PropertyListItem(BaseModel):
     main_photo: Optional[str]
     slug: str
     created_at: datetime
+    parking_spots: int = 0
+    has_garage: bool = False
+    balconies: int = 0
+    has_terrace: bool = False
+    has_garden: bool = False
+    is_furnished: bool = False
 
     # Additional fields for search results
     distance_km: Optional[float] = None  # Distance from search point
