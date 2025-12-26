@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, Enum as SQLEnum, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from geoalchemy2 import Geography
@@ -96,6 +96,10 @@ class Property(Base):
     slug = Column(String(255), unique=True, nullable=False, index=True)
     view_count = Column(Integer, default=0, nullable=False)
     favorite_count = Column(Integer, default=0, nullable=False)
+
+    # Full-text search vector (generated column from migration 003)
+    # This is a GENERATED ALWAYS column, so we don't insert/update it directly
+    search_vector = Column(TSVECTOR, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
