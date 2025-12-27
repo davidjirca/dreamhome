@@ -5,6 +5,7 @@ from sqlalchemy.sql import func
 import uuid
 import enum
 from app.core.database import Base
+from app.models.alerts import AlertFrequency
 
 
 class AlertFrequency(str, enum.Enum):
@@ -12,64 +13,6 @@ class AlertFrequency(str, enum.Enum):
     INSTANT = "instant"  # Immediate email
     DAILY = "daily"      # Daily digest
     WEEKLY = "weekly"    # Weekly digest
-
-
-class SavedSearch(Base):
-    """Model for saved property searches with alert preferences"""
-    __tablename__ = "saved_searches"
-
-    # Primary Key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
-    # User reference
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-
-    # Search details
-    name = Column(String(100), nullable=False)  # User-friendly name for the search
-    search_params = Column(JSON, nullable=False)  # PropertySearchParams as JSON
-
-    # Alert settings
-    alert_enabled = Column(Boolean, default=True, nullable=False, index=True)
-    alert_frequency = Column(SQLEnum(AlertFrequency), default=AlertFrequency.INSTANT, nullable=False)
-    alert_new_listings = Column(Boolean, default=True, nullable=False)
-    alert_price_drops = Column(Boolean, default=True, nullable=False)
-
-    # Metadata
-    last_alerted_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="saved_searches")
-
-    def __repr__(self):
-        return f"<SavedSearch {self.name} by user {self.user_id}>"
-
-
-class Favorite(Base):
-    """Model for user's favorite properties"""
-    __tablename__ = "favorites"
-
-    # Primary Key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
-    # Foreign Keys
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True)
-
-    # Optional notes
-    notes = Column(Text, nullable=True)
-
-    # Timestamp
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="favorites")
-    property = relationship("Property", back_populates="favorited_by")
-
-    def __repr__(self):
-        return f"<Favorite user={self.user_id} property={self.property_id}>"
-
 
 class EmailLog(Base):
     """Model for tracking sent emails"""
