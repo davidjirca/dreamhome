@@ -111,6 +111,7 @@ class Property(Base):
 
     # Relationships
     owner = relationship("User", foreign_keys=[owner_id], backref="properties")
+    price_history = relationship("PropertyPriceHistory", back_populates="property", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Property {self.title} ({self.city})>"

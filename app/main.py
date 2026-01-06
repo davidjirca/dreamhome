@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.cache import cache_service  # ADD THIS IMPORT
 from app.api.v1.api import api_router
 
 
@@ -13,17 +14,30 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events
     """
     # Startup
-    print("Starting up...")
+    print("🚀 Starting up...")
+    
     # Initialize database tables (for development only)
     # In production, use Alembic migrations
     if settings.ENVIRONMENT == "development":
         await init_db()
-    print("Database initialized")
+        print("✅ Database initialized")
+    
+    # Connect to Redis cache
+    await cache_service.connect()
+    print("✅ Cache service connected")
+    
+    print("✅ Application ready!")
 
     yield
 
     # Shutdown
-    print("Shutting down...")
+    print("🛑 Shutting down...")
+    
+    # Disconnect from Redis
+    await cache_service.disconnect()
+    print("✅ Cache service disconnected")
+    
+    print("✅ Shutdown complete")
 
 
 # Create FastAPI application
@@ -33,7 +47,7 @@ app = FastAPI(
     lifespan=lifespan,
     version="1.0.0",
     description="""
-    # RealEstate Platform API
+    # dreamhome Platform API
 
     A comprehensive real estate platform for the Romanian market.
 
@@ -41,9 +55,11 @@ app = FastAPI(
 
     * **Authentication**: Register, login, refresh tokens
     * **User Management**: Profile management, role-based access
-    * **Property Listings**: Create, search, and manage listings (coming soon)
-    * **Map Search**: Interactive map-based property search (coming soon)
-    * **Favorites & Alerts**: Save searches and get notifications (coming soon)
+    * **Property Listings**: Create, search, and manage listings
+    * **Advanced Search**: Full-text, geospatial, 30+ filters
+    * **Map Search**: Interactive map-based property search
+    * **Favorites & Alerts**: Save searches and get notifications
+    * **Caching**: Redis-powered search performance
 
     ## User Roles
 
@@ -71,7 +87,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to RealEstate Platform API",
+        "message": "Welcome to dreamhome Platform API",
         "version": "1.0.0",
         "docs": "/docs",
         "redoc": "/redoc"
@@ -83,5 +99,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
+        "cache_enabled": settings.CACHE_ENABLED,
+        "cache_available": cache_service.is_available()
     }

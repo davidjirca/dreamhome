@@ -5,8 +5,6 @@ from sqlalchemy.sql import func
 import uuid
 import enum
 from app.core.database import Base
-from app.models.alerts import AlertFrequency
-
 
 class AlertFrequency(str, enum.Enum):
     """Alert frequency enumeration"""
