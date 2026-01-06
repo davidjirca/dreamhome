@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func as sa_func
 from fastapi import HTTPException, status
 
-from app.models.alerts import SavedSearch, Favorite, PropertyPriceHistory, AlertFrequency
+from app.models.alerts import SavedSearch, Favorite, PropertyPriceHistory
+from app.models.enums import NotificationFrequency
 from app.models.property import Property, PropertyStatus
 from app.models.user import User
 from app.schemas.alerts import SavedSearchCreate, SavedSearchUpdate, FavoriteCreate
 from app.services.property_service import property_service
 from app.services.email_service import email_service
+from app.core.config import settings
 
 
 class AlertService:
@@ -261,8 +263,8 @@ class AlertService:
     async def track_price_change(
         db: AsyncSession,
         property_id: UUID,
-        old_price: float,
-        new_price: float
+        old_price: int,
+        new_price: int
     ):
         """Record a price change in history"""
         price_change_percent = ((new_price - old_price) / old_price) * 100
@@ -287,8 +289,8 @@ class AlertService:
     async def _send_price_drop_alerts(
         db: AsyncSession,
         property_id: UUID,
-        old_price: float,
-        new_price: float,
+        old_price: int,
+        new_price: int,
         price_drop_percent: float
     ):
         """Send price drop alerts to users who favorited this property"""
@@ -313,14 +315,14 @@ class AlertService:
             user = user_result.scalar_one_or_none()
             
             if user and user.is_active:
-                property_url = f"https://dreamhome.ro/properties/{property_obj.slug}"
+                property_url = f"{settings.PLATFORM_URL}/properties/{property_obj.slug}"
                 
                 await email_service.send_price_drop_alert(
                     to_email=user.email,
                     user_id=user.id,
                     property_title=property_obj.title,
-                    old_price=old_price,
-                    new_price=new_price,
+                    old_price=float(old_price),
+                    new_price=float(new_price),
                     price_drop_percent=price_drop_percent,
                     property_url=property_url,
                     main_photo=property_obj.main_photo,
@@ -350,7 +352,10 @@ class AlertService:
             select(SavedSearch).where(
                 and_(
                     SavedSearch.alert_enabled == True,
-                    SavedSearch.alert_frequency == AlertFrequency.INSTANT,
+                    SavedSearch.alert_frequency.in_([
+                        NotificationFrequency.INSTANT,
+                        NotificationFrequency.IMMEDIATE
+                    ]),
                     SavedSearch.alert_new_listings == True
                 )
             )
@@ -438,10 +443,10 @@ class AlertService:
                 'rooms': prop.rooms,
                 'total_area': float(prop.total_area),
                 'main_photo': prop.main_photo,
-                'url': f"https://dreamhome.ro/properties/{prop.slug}"
+                'url': f"{settings.PLATFORM_URL}/properties/{prop.slug}"
             })
         
-        search_url = f"https://dreamhome.ro/search?saved_search={saved_search.id}"
+        search_url = f"{settings.PLATFORM_URL}/search?saved_search={saved_search.id}"
         
         await email_service.send_new_listing_alert(
             to_email=user.email,
@@ -465,7 +470,7 @@ class AlertService:
             select(SavedSearch).where(
                 and_(
                     SavedSearch.alert_enabled == True,
-                    SavedSearch.alert_frequency == AlertFrequency.DAILY
+                    SavedSearch.alert_frequency == NotificationFrequency.DAILY
                 )
             )
         )
@@ -516,7 +521,7 @@ class AlertService:
                     'name': search.name,
                     'new_count': total,
                     'properties': properties[:5],  # First 5 properties
-                    'url': f"https://dreamhome.ro/search?saved_search={search.id}"
+                    'url': f"{settings.PLATFORM_URL}/search?saved_search={search.id}"
                 })
                 
                 # Update last alerted
@@ -578,7 +583,7 @@ class AlertService:
                     'old_price': float(history.old_price),
                     'new_price': float(history.new_price),
                     'price_drop_percent': abs(float(history.price_change_percent)),
-                    'property_url': f"https://dreamhome.ro/properties/{property_obj.slug}",
+                    'property_url': f"{settings.PLATFORM_URL}/properties/{property_obj.slug}",
                     'main_photo': property_obj.main_photo
                 })
         

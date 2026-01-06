@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -33,7 +33,7 @@ class ListingType(str, enum.Enum):
 
 
 class Property(Base):
-    """Property listing model"""
+    """Property listing model - ALL NUMERIC FIELDS ARE INTEGERS"""
     __tablename__ = "properties"
 
     # Primary Key
@@ -49,15 +49,15 @@ class Property(Base):
     listing_type = Column(SQLEnum(ListingType), nullable=False, index=True)
     status = Column(SQLEnum(PropertyStatus), default=PropertyStatus.DRAFT, nullable=False, index=True)
 
-    # Pricing
+    # Pricing - ALL INTEGERS
     price = Column(Integer, nullable=False, index=True)  # Whole number prices in RON/EUR
-    price_per_sqm = Column(Numeric(10, 2), nullable=True)  # Can have decimals (e.g., 1250.50)
+    price_per_sqm = Column(Integer, nullable=True)  # Whole number price per sqm
     currency = Column(String(3), default="RON", nullable=False)
     negotiable = Column(Boolean, default=False, nullable=False)
 
-    # Details (area in square meters - whole numbers)
-    total_area = Column(Integer, nullable=False)
-    usable_area = Column(Integer, nullable=True)
+    # Details - ALL INTEGERS for area (in square meters)
+    total_area = Column(Integer, nullable=False)  # Whole number in sqm
+    usable_area = Column(Integer, nullable=True)  # Whole number in sqm
     rooms = Column(Integer, nullable=False, index=True)
     bedrooms = Column(Integer, nullable=False)
     bathrooms = Column(Integer, nullable=False)
@@ -73,7 +73,7 @@ class Property(Base):
     has_garden = Column(Boolean, default=False, nullable=False)
     is_furnished = Column(Boolean, default=False, nullable=False)
     heating_type = Column(String(50), nullable=True)
-    energy_rating = Column(String(10), nullable=True)
+    keep_rating = Column(String(10), nullable=True)
 
     # Location
     address = Column(String(255), nullable=False)
@@ -82,9 +82,11 @@ class Property(Base):
     postal_code = Column(String(20), nullable=True)
     neighborhood = Column(String(100), nullable=True)
 
-    # Geolocation
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
+    # Geolocation - KEEP BOTH FOR BEST PRACTICE
+    # latitude/longitude: For API responses and simple calculations (stored as float)
+    # location: For PostGIS spatial queries (required for performance)
+    latitude = Column(Integer, nullable=True)  # Store as integer (multiply by 1e6)
+    longitude = Column(Integer, nullable=True)  # Store as integer (multiply by 1e6)
     location = Column(Geography(geometry_type='POINT', srid=4326), nullable=True)
 
     # Media (JSON array of URLs)
@@ -115,3 +117,49 @@ class Property(Base):
 
     def __repr__(self):
         return f"<Property {self.title} ({self.city})>"
+    
+    # Helper properties for lat/lng as floats (for API responses)
+    @property
+    def lat_float(self) -> float:
+        """Get latitude as float for API responses"""
+        if self.latitude is not None:
+            return self.latitude / 1_000_000.0
+        return None
+    
+    @property
+    def lng_float(self) -> float:
+        """Get longitude as float for API responses"""
+        if self.longitude is not None:
+            return self.longitude / 1_000_000.0
+        return None
+    
+    def set_coordinates(self, lat: float, lng: float):
+        """
+        Set coordinates and auto-update PostGIS location
+        
+        Args:
+            lat: Latitude as float (e.g., 44.4268)
+            lng: Longitude as float (e.g., 26.1025)
+        """
+        # Store as integers (multiply by 1e6 for precision)
+        self.latitude = int(lat * 1_000_000)
+        self.longitude = int(lng * 1_000_000)
+        
+        # Update PostGIS location for spatial queries
+        self.location = f"SRID=4326;POINT({lng} {lat})"
+    
+    @staticmethod
+    def calculate_price_per_sqm(price: int, area: int) -> int:
+        """
+        Calculate price per square meter as integer
+        
+        Args:
+            price: Property price (integer)
+            area: Total area in sqm (integer)
+        
+        Returns:
+            Price per sqm as integer
+        """
+        if area > 0:
+            return round(price / area)
+        return 0

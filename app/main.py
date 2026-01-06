@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.core.cache import cache_service  # ADD THIS IMPORT
+from app.core.cache import cache_service
 from app.api.v1.api import api_router
 
 
@@ -59,6 +59,7 @@ app = FastAPI(
     * **Advanced Search**: Full-text, geospatial, 30+ filters
     * **Map Search**: Interactive map-based property search
     * **Favorites & Alerts**: Save searches and get notifications
+    * **Admin Panel**: Complete platform management
     * **Caching**: Redis-powered search performance
 
     ## User Roles
@@ -67,6 +68,13 @@ app = FastAPI(
     * **Owner**: Can list properties
     * **Agent**: Can manage multiple listings
     * **Admin**: Full platform access
+
+    ## Technical Stack
+
+    * **Backend**: FastAPI + Python 3.11
+    * **Database**: PostgreSQL + PostGIS
+    * **Cache**: Redis
+    * **Authentication**: JWT tokens with Argon2
     """
 )
 
@@ -90,7 +98,8 @@ async def root():
         "message": "Welcome to dreamhome Platform API",
         "version": "1.0.0",
         "docs": "/docs",
-        "redoc": "/redoc"
+        "redoc": "/redoc",
+        "platform": "dreamhome - Romanian Real Estate Platform"
     }
 
 
@@ -99,6 +108,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
+        "platform": "dreamhome",
         "environment": settings.ENVIRONMENT,
         "cache_enabled": settings.CACHE_ENABLED,
         "cache_available": cache_service.is_available()
