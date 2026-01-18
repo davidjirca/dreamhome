@@ -1,0 +1,305 @@
+# Prometheus Alert Rules for dreamhome Platform
+# Defines alerting conditions for critical events
+
+groups:
+  # ============================================================================
+  # API PERFORMANCE ALERTS
+  # ============================================================================
+  - name: api_performance
+    interval: 30s
+    rules:
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile API response time is {{ $value }}s (threshold: 1s)"
+
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 3
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical API latency detected"
+          description: "95th percentile API response time is {{ $value }}s (threshold: 3s)"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+  # ============================================================================
+  # SEARCH PERFORMANCE ALERTS
+  # ============================================================================
+  - name: search_performance
+    interval: 30s
+    rules:
+      - alert: SlowSearchQueries
+        expr: histogram_quantile(0.95, rate(property_search_duration_seconds_bucket[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "Search queries are slow"
+          description: "95th percentile search time is {{ $value }}s (threshold: 0.3s)"
+
+      - alert: HighSearchFailureRate
+        expr: rate(property_searches_total{result="error"}[5m]) / rate(property_searches_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "High search failure rate"
+          description: "Search failure rate is {{ $value | humanizePercentage }}"
+
+  # ============================================================================
+  # DATABASE ALERTS
+  # ============================================================================
+  - name: database
+    interval: 30s
+    rules:
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database connection usage"
+          description: "Using {{ $value | humanizePercentage }} of available connections"
+
+      - alert: SlowDatabaseQueries
+        expr: rate(pg_stat_statements_mean_exec_time[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}ms"
+
+      - alert: DatabaseReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database replication lag"
+          description: "Replication lag is {{ $value }}s"
+
+  # ============================================================================
+  # CACHE ALERTS
+  # ============================================================================
+  - name: cache
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis is using {{ $value | humanizePercentage }} of available memory"
+
+      - alert: RedisConnectionsExhausted
+        expr: redis_connected_clients / redis_config_maxclients > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis connections near limit"
+          description: "Using {{ $value | humanizePercentage }} of available connections"
+
+  # ============================================================================
+  # SYSTEM RESOURCE ALERTS
+  # ============================================================================
+  - name: system_resources
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining on {{ $labels.instance }}"
+
+      - alert: CriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk space"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining on {{ $labels.instance }}"
+
+  # ============================================================================
+  # APPLICATION-SPECIFIC ALERTS
+  # ============================================================================
+  - name: application
+    interval: 1m
+    rules:
+      - alert: HighUserRegistrationFailures
+        expr: rate(user_registrations_total{status="failed"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High user registration failure rate"
+          description: "{{ $value }} registration failures per second"
+
+      - alert: HighLoginFailures
+        expr: rate(user_login_failures_total[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High login failure rate - possible brute force attack"
+          description: "{{ $value }} login failures per second"
+
+      - alert: EmailSendingIssues
+        expr: rate(emails_sent_total{status="failed"}[5m]) / rate(emails_sent_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: email
+        annotations:
+          summary: "High email failure rate"
+          description: "Email failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: NoRecentSearches
+        expr: rate(property_searches_total[10m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "No search activity detected"
+          description: "No searches in the last 30 minutes - possible system issue"
+
+  # ============================================================================
+  # SERVICE HEALTH ALERTS
+  # ============================================================================
+  - name: service_health
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: "{{ $labels.job }}"
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 2 minutes"
+
+      - alert: TooManyRestarts
+        expr: changes(process_start_time_seconds[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: "{{ $labels.job }}"
+        annotations:
+          summary: "Service restarting frequently"
+          description: "{{ $labels.job }} has restarted {{ $value }} times in the last 15 minutes"

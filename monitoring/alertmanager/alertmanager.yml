@@ -1,0 +1,95 @@
+# AlertManager Configuration
+# Handles alert routing and notifications
+
+global:
+  resolve_timeout: 5m
+  smtp_from: 'alerts@dreamhome.ro'
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'your-app-password'
+  smtp_require_tls: true
+
+# Alert routing
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'team-email'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'team-email'
+      group_wait: 0s
+      repeat_interval: 5m
+    
+    # Warning alerts - grouped notifications
+    - match:
+        severity: warning
+      receiver: 'team-email'
+      group_wait: 30s
+      repeat_interval: 4h
+    
+    # Database alerts - specific handling
+    - match:
+        component: database
+      receiver: 'database-team'
+      group_wait: 10s
+    
+    # System alerts
+    - match:
+        component: system
+      receiver: 'devops-team'
+
+# Alert receivers
+receivers:
+  - name: 'team-email'
+    email_configs:
+      - to: 'team@dreamhome.ro'
+        headers:
+          Subject: '🚨 [{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        html: |
+          <!DOCTYPE html>
+          <html>
+          <body>
+            <h2>Alert: {{ .GroupLabels.alertname }}</h2>
+            <p><strong>Status:</strong> {{ .Status }}</p>
+            <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+            <p><strong>Component:</strong> {{ .CommonLabels.component }}</p>
+            <h3>Details:</h3>
+            {{ range .Alerts }}
+            <p>{{ .Annotations.description }}</p>
+            {{ end }}
+            <p><a href="{{ .ExternalURL }}">View in AlertManager</a></p>
+          </body>
+          </html>
+  
+  - name: 'database-team'
+    email_configs:
+      - to: 'database-team@dreamhome.ro'
+        headers:
+          Subject: '💾 Database Alert: {{ .GroupLabels.alertname }}'
+  
+  - name: 'devops-team'
+    email_configs:
+      - to: 'devops@dreamhome.ro'
+        headers:
+          Subject: '⚙️ System Alert: {{ .GroupLabels.alertname }}'
+
+# Inhibition rules (suppress certain alerts when others are firing)
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  # Inhibit database alerts if database is down
+  - source_match:
+      alertname: 'DatabaseDown'
+    target_match:
+      component: 'database'
+    equal: ['instance']

@@ -1,9 +1,12 @@
 version: '3.8'
 
 services:
+  # ============================================================================
+  # DATABASE (PostgreSQL + PostGIS)
+  # ============================================================================
   db:
     image: postgis/postgis:15-3.3
-    container_name: realestate_db
+    container_name: dreamhome_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-realestate}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword123}
@@ -12,57 +15,212 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - realestate_network
+      - dreamhome_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U realestate"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: realestate_backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-realestate}:${POSTGRES_PASSWORD:-devpassword123}@db:5432/${POSTGRES_DB:-realestate_db}
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-    volumes:
-      - ./app:/app/app:z  # Added :z for SELinux (Fedora)
-      - ./alembic:/app/alembic:z
-      - ./alembic.ini:/app/alembic.ini:z
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - realestate_network
-    user: "1000:1000"  # Run as your user ID
-
+  # ============================================================================
+  # CACHE (Redis)
+  # ============================================================================
   redis:
     image: redis:7-alpine
-    container_name: realestate_redis
+    container_name: dreamhome_redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - realestate_network
+      - dreamhome_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
 
+  # ============================================================================
+  # BACKEND (FastAPI)
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dreamhome_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-realestate}:${POSTGRES_PASSWORD:-devpassword123}@db:5432/${POSTGRES_DB:-realestate_db}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      CACHE_ENABLED: "True"
+    volumes:
+      - ./app:/app/app:z
+      - ./alembic:/app/alembic:z
+      - ./alembic.ini:/app/alembic.ini:z
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dreamhome_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - PROMETHEUS
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: dreamhome_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - dreamhome_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - GRAFANA
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: dreamhome_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - dreamhome_network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - NODE EXPORTER (System Metrics)
+  # ============================================================================
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: dreamhome_node_exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - dreamhome_network
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - REDIS EXPORTER
+  # ============================================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.56.0
+    container_name: dreamhome_redis_exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - dreamhome_network
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - POSTGRES EXPORTER
+  # ============================================================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: dreamhome_postgres_exporter
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-realestate}:${POSTGRES_PASSWORD:-devpassword123}@db:5432/${POSTGRES_DB:-realestate_db}?sslmode=disable"
+    networks:
+      - dreamhome_network
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # ============================================================================
+  # ALERTING - ALERTMANAGER (Optional for production)
+  # ============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: dreamhome_alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - dreamhome_network
+    restart: unless-stopped
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
 networks:
-  realestate_network:
+  dreamhome_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
+# ============================================================================
+# VOLUMES
+# ============================================================================
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local

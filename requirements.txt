@@ -16,6 +16,7 @@ argon2-cffi==23.1.0
 python-dotenv==1.2.1
 pydantic[email]==2.12.5
 pydantic-settings==2.12.0
+cryptografy==42.0.0
 
 # Email
 emails==0.6
@@ -24,11 +25,32 @@ jinja2==3.1.6
 # Testing
 pytest==9.0.2
 pytest-asyncio==1.3.0
+pytest-cov==4.1.0
 httpx==0.28.1
+faker==22.0.0
 
 # Utilities
 python-dateutil==2.9.0.post0
 cloudinary==1.44.1
 GeoAlchemy2==0.18.1
 geopy==2.4.1
+
+# Cache and Performance
 redis==7.1.0
+ujson==5.9.0
+orjson==3.11.5
+
+# Monitoring and Observability
+prometheus-client==0.23.1
+opentelemetry-api==1.39.1
+opentelemetry-sdk==1.39.1
+opentelemetry-instrumentation-fastapi==0.60b1
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Structured Logging
+python-json-logger==2.0.7
+
+# Type Checking (dev dependency)
+mypy==1.19.1
