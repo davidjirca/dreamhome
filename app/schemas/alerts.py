@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
-from app.models.alerts import AlertFrequency
+from app.models.enums import NotificationFrequency
 
 
 # Saved Search Schemas
@@ -10,7 +10,7 @@ class SavedSearchBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Name for this saved search")
     search_params: Dict[str, Any] = Field(..., description="Search parameters (PropertySearchParams)")
     alert_enabled: bool = Field(default=True, description="Enable alerts for this search")
-    alert_frequency: AlertFrequency = Field(default=AlertFrequency.INSTANT, description="Alert frequency")
+    alert_frequency: NotificationFrequency = Field(default=NotificationFrequency.INSTANT, description="Alert frequency")
     alert_new_listings: bool = Field(default=True, description="Alert on new listings")
     alert_price_drops: bool = Field(default=True, description="Alert on price drops")
 
@@ -25,7 +25,7 @@ class SavedSearchUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     search_params: Optional[Dict[str, Any]] = None
     alert_enabled: Optional[bool] = None
-    alert_frequency: Optional[AlertFrequency] = None
+    alert_frequency: Optional[NotificationFrequency] = None
     alert_new_listings: Optional[bool] = None
     alert_price_drops: Optional[bool] = None
 
@@ -126,7 +126,7 @@ class PriceDropAlert(BaseModel):
 
 class AlertDigest(BaseModel):
     """Schema for daily/weekly digest email"""
-    frequency: AlertFrequency
+    frequency: NotificationFrequency
     saved_searches: List[Dict[str, Any]]  # List of searches with new matches
     price_drops: List[PriceDropAlert]
     total_new_listings: int

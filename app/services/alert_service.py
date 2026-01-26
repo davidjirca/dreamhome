@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func as sa_func
 from fastapi import HTTPException, status
 
-from app.models.alerts import SavedSearch, Favorite, PropertyPriceHistory
+from app.models.saved_search import SavedSearch
+from app.models.favorite import Favorite
+from app.models.alerts import PropertyPriceHistory
 from app.models.enums import NotificationFrequency
 from app.models.property import Property, PropertyStatus
 from app.models.user import User
@@ -13,7 +15,6 @@ from app.schemas.alerts import SavedSearchCreate, SavedSearchUpdate, FavoriteCre
 from app.services.property_service import property_service
 from app.services.email_service import email_service
 from app.core.config import settings
-
 
 class AlertService:
     """Service layer for saved searches, favorites, and alerts"""
