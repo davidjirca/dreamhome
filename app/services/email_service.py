@@ -49,7 +49,7 @@ class EmailService:
         email_type: str = "general",
         user_id: Optional[UUID] = None,
         db: Optional[AsyncSession] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        email_metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
         Send an email and log the result
@@ -62,7 +62,7 @@ class EmailService:
             email_type: Type of email for logging (e.g., 'new_listing', 'price_drop')
             user_id: User ID for logging (optional)
             db: Database session for logging (optional)
-            metadata: Additional metadata to log (optional)
+            email_metadata: Additional metadata to log (optional)
         
         Returns:
             True if email sent successfully, False otherwise
@@ -81,7 +81,7 @@ class EmailService:
                     success=False,
                     error_message="Email service not configured",
                     user_id=user_id,
-                    metadata=metadata
+                    email_metadata=email_metadata
                 )
             return False
         
@@ -115,7 +115,7 @@ class EmailService:
                     db, to_email, email_type, subject,
                     success=True,
                     user_id=user_id,
-                    metadata=metadata
+                    email_metadata=email_metadata
                 )
             
             return True
@@ -130,7 +130,7 @@ class EmailService:
                     success=False,
                     error_message=str(e),
                     user_id=user_id,
-                    metadata=metadata
+                    email_metadata=email_metadata
                 )
             
             return False
@@ -144,7 +144,7 @@ class EmailService:
         success: bool,
         error_message: Optional[str] = None,
         user_id: Optional[UUID] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        email_metadata: Optional[Dict[str, Any]] = None
     ):
         """Log email send attempt to database"""
         try:
@@ -155,7 +155,7 @@ class EmailService:
                 subject=subject,
                 success=success,
                 error_message=error_message,
-                metadata=metadata
+                email_metadata=email_metadata  # FIXED: was 'metadata'
             )
             db.add(email_log)
             await db.flush()
@@ -239,7 +239,7 @@ class EmailService:
             email_type='new_listing_alert',
             user_id=user_id,
             db=db,
-            metadata={
+            email_metadata={
                 'search_name': search_name,
                 'property_count': len(properties),
                 'property_ids': [p.get('id') for p in properties]
@@ -278,7 +278,7 @@ class EmailService:
             email_type='price_drop_alert',
             user_id=user_id,
             db=db,
-            metadata={
+            email_metadata={
                 'property_title': property_title,
                 'old_price': float(old_price),
                 'new_price': float(new_price),
@@ -314,7 +314,7 @@ class EmailService:
             email_type='daily_digest',
             user_id=user_id,
             db=db,
-            metadata={
+            email_metadata={
                 'total_new_listings': total_new,
                 'total_price_drops': len(price_drops)
             }

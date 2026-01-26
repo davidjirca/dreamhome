@@ -16,7 +16,7 @@ argon2-cffi==23.1.0
 python-dotenv==1.2.1
 pydantic[email]==2.12.5
 pydantic-settings==2.12.0
-cryptografy==42.0.0
+cryptography==42.0.0
 
 # Email
 emails==0.6

@@ -4,7 +4,10 @@ from app.models.alerts import PropertyPriceHistory, EmailLog
 from app.models.favorite import Favorite
 from app.models.saved_search import SavedSearch, NotificationFrequency
 from app.models.search_analytics import SearchQuery
+from sqlalchemy.orm import relationship
 
+# Add the price_history relationship to Property after all models are imported
+# This avoids circular import issues
 Property.price_history = relationship(
     "PropertyPriceHistory",
     back_populates="property",
